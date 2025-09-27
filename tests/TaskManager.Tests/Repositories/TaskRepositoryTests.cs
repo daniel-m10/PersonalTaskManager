@@ -68,7 +68,7 @@ namespace TaskManager.Tests.Repositories
             {
                 Id = Guid.NewGuid(),
                 Title = "Test Task",
-                Status = Status.Pending,
+                Status = Status.InProgress,
                 Priority = Priority.Medium,
                 CreatedAt = DateTime.UtcNow
             };
@@ -83,7 +83,7 @@ namespace TaskManager.Tests.Repositories
                 Assert.That(result, Is.InstanceOf<TaskItem>());
                 Assert.That(result.Id, Is.Not.Default);
                 Assert.That(result.Title, Is.EqualTo("Test Task"));
-                Assert.That(result.Status, Is.EqualTo(Status.Pending));
+                Assert.That(result.Status, Is.EqualTo(Status.InProgress));
                 Assert.That(result.Priority, Is.EqualTo(Priority.Medium));
                 Assert.That(result.CreatedAt, Is.Not.Default);
             }
@@ -100,7 +100,7 @@ namespace TaskManager.Tests.Repositories
             {
                 Id = guid,
                 Title = "Test Task",
-                Status = Status.Pending,
+                Status = Status.InProgress,
                 Priority = Priority.Medium,
                 CreatedAt = now,
                 Description = "Test Description",
@@ -219,7 +219,7 @@ namespace TaskManager.Tests.Repositories
             {
                 Id = Guid.NewGuid(),
                 Title = "Non-existent Task",
-                Status = Status.Pending,
+                Status = Status.InProgress,
                 Priority = Priority.Low,
                 CreatedAt = DateTime.UtcNow
             };
@@ -266,7 +266,7 @@ namespace TaskManager.Tests.Repositories
             {
                 Id = guid,
                 Title = "Test Task",
-                Status = Status.Pending,
+                Status = Status.InProgress,
                 Priority = Priority.Medium,
                 CreatedAt = now,
                 Description = "Test Description",
