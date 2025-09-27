@@ -20,4 +20,11 @@
     <Using Include="NUnit.Framework" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TaskManager.Api\TaskManager.Api.csproj" />
+    <ProjectReference Include="..\..\src\TaskManager.Services\TaskManager.Services.csproj" />
+    <ProjectReference Include="..\..\src\TaskManager.Core\TaskManager.Core.csproj" />
+    <ProjectReference Include="..\..\src\TaskManager.Data\TaskManager.Data.csproj" />
+  </ItemGroup>
+
 </Project>
