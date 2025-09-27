@@ -14,6 +14,7 @@ namespace TaskManager.Core.Entities
 
         #region Optional Fields
         public string Description { get; set; } = string.Empty;
+        public bool IsDeleted { get; set; } = false;
         public DateTime? DueDate { get; set; }
         public DateTime? CompletedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
