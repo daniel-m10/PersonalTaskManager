@@ -1,23 +1,64 @@
-﻿using NSubstitute;
-using NSubstitute.ExceptionExtensions;
+﻿using Dapper;
+using Microsoft.Data.Sqlite;
+using System.Data;
 using TaskManager.Core.Entities;
 using TaskManager.Core.Enums;
-using TaskManager.Core.Interfaces;
+using TaskManager.Data.Handlers;
+using TaskManager.Data.Repositories;
 
 namespace TaskManager.Tests.Repositories
 {
     [TestFixture]
     public class TaskRepositoryTests
     {
-        private ITaskRepository _repository;
+        private TaskRepository _repository;
+        private IDbConnection _connection;
 
         [SetUp]
         public void SetUp()
         {
-            _repository = Substitute.For<ITaskRepository>();
+            // Register custom type handler for Guid
+            SqlMapper.AddTypeHandler(new GuidTypeHandler());
+
+            // Create in-memory Sqlite database and Tasks table
+            _connection = new SqliteConnection("Data Source=:memory:");
+            _connection.Open();
+
+            // Crete table schema for Tasks
+            var createTableCmd = _connection.CreateCommand();
+
+            createTableCmd.CommandText = @"
+                CREATE TABLE Tasks (
+                    Id TEXT PRIMARY KEY,
+                    Title TEXT NOT NULL,
+                    Description TEXT,
+                    Status INTEGER NOT NULL,
+                    Priority INTEGER NOT NULL,
+                    CreatedAt TEXT NOT NULL,
+                    DueDate TEXT,
+                    CompletedAt TEXT,
+                    UpdatedAt TEXT
+                )";
+
+            createTableCmd.ExecuteNonQuery();
+
+            _repository = new TaskRepository(_connection);
         }
 
-        // TODO: Update tests when repository is implemented, use in-memory Sqlite
+        [TearDown]
+        public void TearDown()
+        {
+            _connection.Close();
+            _connection.Dispose();
+        }
+
+        [Test]
+        public void Constructor_ShouldThrowArgumentNullException_WhenConnectionIsNull()
+        {
+            // Act & Assert
+            var ex = Assert.Throws<ArgumentNullException>(() => new TaskRepository(null!));
+            Assert.That(ex.ParamName, Is.EqualTo("connection"));
+        }
 
         [Test]
         public async Task Create_ShouldReturnTaskItem_WhenValidTaskIsProvided()
@@ -32,8 +73,6 @@ namespace TaskManager.Tests.Repositories
                 CreatedAt = DateTime.UtcNow
             };
 
-            _repository.Create(Arg.Any<TaskItem>()).Returns(taskItem);
-
             // Act
             var result = await _repository.Create(taskItem);
 
@@ -42,14 +81,11 @@ namespace TaskManager.Tests.Repositories
             {
                 Assert.That(result, Is.Not.Null);
                 Assert.That(result, Is.InstanceOf<TaskItem>());
-                Assert.Multiple(() =>
-                {
-                    Assert.That(result.Id, Is.Not.Default);
-                    Assert.That(result.Title, Is.EqualTo("Test Task"));
-                    Assert.That(result.Status, Is.EqualTo(Status.Pending));
-                    Assert.That(result.Priority, Is.EqualTo(Priority.Medium));
-                    Assert.That(result.CreatedAt, Is.Not.Default);
-                });
+                Assert.That(result.Id, Is.Not.Default);
+                Assert.That(result.Title, Is.EqualTo("Test Task"));
+                Assert.That(result.Status, Is.EqualTo(Status.Pending));
+                Assert.That(result.Priority, Is.EqualTo(Priority.Medium));
+                Assert.That(result.CreatedAt, Is.Not.Default);
             }
         }
 
@@ -58,6 +94,7 @@ namespace TaskManager.Tests.Repositories
         {
             // Arrange
             var guid = Guid.NewGuid();
+            var now = DateTime.UtcNow;
 
             var taskItem = new TaskItem
             {
@@ -65,41 +102,44 @@ namespace TaskManager.Tests.Repositories
                 Title = "Test Task",
                 Status = Status.Pending,
                 Priority = Priority.Medium,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                Description = "Test Description",
+                DueDate = now.AddDays(2),
+                CompletedAt = null,
+                UpdatedAt = null
             };
-
-            _repository.Create(Arg.Any<TaskItem>()).Returns(taskItem);
 
             // Act
             var result = await _repository.Create(taskItem);
 
             // Assert
-            Assert.That(result.Id, Is.EqualTo(guid));
+            Assert.That(result, Is.Not.Null);
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(result.Id, Is.EqualTo(guid));
+                Assert.That(result.Title, Is.EqualTo(taskItem.Title));
+                Assert.That(result.Status, Is.EqualTo(taskItem.Status));
+                Assert.That(result.Priority, Is.EqualTo(taskItem.Priority));
+                Assert.That(result.CreatedAt, Is.EqualTo(taskItem.CreatedAt));
+                Assert.That(result.Description, Is.EqualTo(taskItem.Description));
+                Assert.That(result.DueDate, Is.EqualTo(taskItem.DueDate));
+                Assert.That(result.CompletedAt, Is.EqualTo(taskItem.CompletedAt));
+                Assert.That(result.UpdatedAt, Is.EqualTo(taskItem.UpdatedAt));
+            }
         }
 
         [Test]
         public async Task GetById_ShouldReturnTaskItem_WhenTaskExists()
         {
             // Arrange
-            var guid = Guid.NewGuid();
-
-            var taskItem = new TaskItem
-            {
-                Id = guid,
-                Title = "Test Task",
-                Status = Status.Pending,
-                Priority = Priority.Medium,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _repository.GetById(guid).Returns(taskItem);
+            var task = InsertTaskItem();
 
             // Act
-            var result = await _repository.GetById(guid);
+            var result = await _repository.GetById(task.Id);
 
             // Assert
             Assert.That(result, Is.Not.Null);
-            Assert.That(result.Id, Is.EqualTo(guid));
+            Assert.That(result.Id, Is.EqualTo(task.Id));
         }
 
         [Test]
@@ -107,7 +147,6 @@ namespace TaskManager.Tests.Repositories
         {
             // Arrange
             var id = Guid.NewGuid();
-            _repository.GetById(Arg.Any<Guid>())!.Returns((TaskItem?)null);
 
             // Act
             var result = await _repository.GetById(id);
@@ -120,25 +159,7 @@ namespace TaskManager.Tests.Repositories
         public async Task GetAll_ShouldReturnAllTaskItems_WhenTasksExist()
         {
             // Arrange
-            var tasks = new List<TaskItem>
-            {
-                new() {
-                    Id = Guid.NewGuid(),
-                    Title = "Task 1",
-                    Status = Status.Pending,
-                    Priority = Priority.Medium,
-                    CreatedAt = DateTime.UtcNow
-                },
-                new() {
-                    Id = Guid.NewGuid(),
-                    Title = "Task 2",
-                    Status = Status.InProgress,
-                    Priority = Priority.High,
-                    CreatedAt = DateTime.UtcNow
-                }
-            };
-
-            _repository.GetAll().Returns(tasks);
+            InsertMultipleTaskItems(2);
 
             // Act
             var result = await _repository.GetAll();
@@ -146,20 +167,13 @@ namespace TaskManager.Tests.Repositories
             // Assert
             Assert.That(result, Is.Not.Null);
             Assert.That(result, Is.InstanceOf<IEnumerable<TaskItem>>());
-            using (Assert.EnterMultipleScope())
-            {
-                Assert.That(result.Count(), Is.EqualTo(2));
-                Assert.That(result, Is.EquivalentTo(tasks));
-            }
+            Assert.That(result.Count(), Is.EqualTo(2));
         }
 
         [Test]
         public async Task GetAll_ShouldReturnEmptyCollection_WhenNoTasksExist()
         {
-            // Arrange
-            _repository.GetAll().Returns([]);
-
-            // Act
+            // Arrange & Act
             var result = await _repository.GetAll();
 
             // Assert
@@ -172,7 +186,7 @@ namespace TaskManager.Tests.Repositories
         public async Task Update_ShouldReturnUpdatedTaskItem_WhenTaskExists()
         {
             // Arrange
-            var guid = Guid.NewGuid();
+            var guid = InsertTaskItem().Id;
             var updatedTitle = "Updated Task Title";
 
             var taskItem = new TaskItem
@@ -184,8 +198,6 @@ namespace TaskManager.Tests.Repositories
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-
-            _repository.Update(Arg.Any<TaskItem>()).Returns(taskItem);
 
             // Act
             var result = await _repository.Update(taskItem);
@@ -200,7 +212,7 @@ namespace TaskManager.Tests.Repositories
         }
 
         [Test]
-        public void Update_ShouldThrowException_WhenTaskDoesNotExist()
+        public async Task Update_ShouldReturnNull_WhenTaskDoesNotExist()
         {
             // Arrange
             var taskItem = new TaskItem
@@ -211,22 +223,22 @@ namespace TaskManager.Tests.Repositories
                 Priority = Priority.Low,
                 CreatedAt = DateTime.UtcNow
             };
-            _repository.Update(Arg.Any<TaskItem>()).Throws(new KeyNotFoundException("Task not found"));
+
+            // Act
+            var result = await _repository.Update(taskItem);
 
             // Act & Assert
-            var ex = Assert.ThrowsAsync<KeyNotFoundException>(async () => await _repository.Update(taskItem));
-            Assert.That(ex.Message, Is.EqualTo("Task not found"));
+            Assert.That(result, Is.Null);
         }
 
         [Test]
         public async Task Delete_ShouldReturnTrue_WhenTaskIsDeleted()
         {
             // Arrange
-            var guid = Guid.NewGuid();
-            _repository.Delete(guid).Returns(true);
+            var task = InsertTaskItem();
 
             // Act
-            var result = await _repository.Delete(guid);
+            var result = await _repository.Delete(task.Id);
 
             // Assert
             Assert.That(result, Is.True);
@@ -237,13 +249,59 @@ namespace TaskManager.Tests.Repositories
         {
             // Arrange
             var guid = Guid.NewGuid();
-            _repository.Delete(guid).Returns(false);
 
             // Act
             var result = await _repository.Delete(guid);
 
             // Assert
             Assert.That(result, Is.False);
+        }
+
+        private TaskItem InsertTaskItem()
+        {
+            var guid = Guid.NewGuid();
+            var now = DateTime.UtcNow;
+
+            var taskItem = new TaskItem
+            {
+                Id = guid,
+                Title = "Test Task",
+                Status = Status.Pending,
+                Priority = Priority.Medium,
+                CreatedAt = now,
+                Description = "Test Description",
+                DueDate = now.AddDays(2),
+                CompletedAt = null,
+                UpdatedAt = null
+            };
+
+            var createCmd = _connection.CreateCommand();
+            createCmd.CommandText = @"
+                INSERT INTO Tasks (Id, Title, Description, Status, Priority, CreatedAt, DueDate, CompletedAt, UpdatedAt)
+                VALUES (@Id, @Title, @Description, @Status, @Priority, @CreatedAt, @DueDate, @CompletedAt, @UpdatedAt)";
+
+            createCmd.Parameters.Add(new SqliteParameter("@Id", taskItem.Id.ToString()));
+            createCmd.Parameters.Add(new SqliteParameter("@Title", taskItem.Title));
+            createCmd.Parameters.Add(new SqliteParameter("@Description", taskItem.Description));
+            createCmd.Parameters.Add(new SqliteParameter("@Status", (int)taskItem.Status));
+            createCmd.Parameters.Add(new SqliteParameter("@Priority", (int)taskItem.Priority));
+            createCmd.Parameters.Add(new SqliteParameter("@CreatedAt", taskItem.CreatedAt.ToString("o")));
+            createCmd.Parameters.Add(new SqliteParameter("@DueDate", taskItem.DueDate?.ToString("o") ?? (object)DBNull.Value));
+            createCmd.Parameters.Add(new SqliteParameter("@CompletedAt", taskItem.CompletedAt?.ToString("o") ?? (object)DBNull.Value));
+            createCmd.Parameters.Add(new SqliteParameter("@UpdatedAt", taskItem.UpdatedAt?.ToString("o") ?? (object)DBNull.Value));
+            createCmd.ExecuteNonQuery();
+
+            return taskItem;
+        }
+
+        private IEnumerable<TaskItem> InsertMultipleTaskItems(int count)
+        {
+            var tasks = new List<TaskItem>();
+            for (int i = 0; i < count; i++)
+            {
+                tasks.Add(InsertTaskItem());
+            }
+            return tasks;
         }
     }
 }
