@@ -1,0 +1,18 @@
+#!/bin/sh
+# Cross-platform pre-push hook: calls PowerShell on Windows, Bash elsewhere
+
+if [ "$OS" = "Windows_NT" ]; then
+  # Call PowerShell script for Windows users
+  powershell.exe -File "$(dirname "$0")/pre-push.ps1"
+  exit $?
+fi
+
+# Bash logic for Linux/macOS/WSL
+while read local_ref local_sha remote_ref remote_sha
+do
+  if [ "$local_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "Direct pushes to 'main' are disabled. Use a feature branch and open a PR."
+    exit 1
+  fi
+done
+exit 0
