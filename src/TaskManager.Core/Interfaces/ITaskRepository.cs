@@ -6,8 +6,8 @@ namespace TaskManager.Core.Interfaces
     {
         Task<TaskItem> Create(TaskItem taskItem);
         Task<IEnumerable<TaskItem>> GetAll();
-        Task<TaskItem> GetById(Guid id);
-        Task<TaskItem> Update(TaskItem taskItem);
+        Task<TaskItem?> GetById(Guid id);
+        Task<TaskItem?> Update(TaskItem taskItem);
         Task<bool> Delete(Guid id);
     }
 }
