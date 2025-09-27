@@ -3,7 +3,7 @@
 
 if [ "$OS" = "Windows_NT" ]; then
   # Call PowerShell script for Windows users
-  powershell.exe -File "$(dirname "$0")/pre-push.ps1"
+  powershell.exe -NoProfile -File "$(dirname "$0")/pre-push.ps1"
   exit $?
 fi
 
