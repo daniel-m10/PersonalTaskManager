@@ -1,15 +1,16 @@
-﻿using TaskManager.Core.Entities;
+﻿using TaskManager.Core.Common;
+using TaskManager.Core.Entities;
 
 namespace TaskManager.Core.Interfaces
 {
     public interface ITaskRepository
     {
-        Task<TaskItem> Create(TaskItem taskItem);
-        Task<IEnumerable<TaskItem>> GetAll();
-        Task<TaskItem?> GetById(Guid id);
-        Task<TaskItem?> Update(TaskItem taskItem);
-        Task<bool> Delete(Guid id);
-        Task<IEnumerable<TaskItem>> GetDeleted();
-        Task<bool> Restore(Guid id);
+        Task<Result<TaskItem>> Create(TaskItem taskItem);
+        Task<Result<IEnumerable<TaskItem>>> GetAll();
+        Task<Result<TaskItem>> GetById(Guid id);
+        Task<Result<TaskItem>> Update(TaskItem taskItem);
+        Task<Result<bool>> Delete(Guid id);
+        Task<Result<IEnumerable<TaskItem>>> GetDeleted();
+        Task<Result<bool>> Restore(Guid id);
     }
 }
