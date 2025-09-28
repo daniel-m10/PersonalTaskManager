@@ -9,5 +9,7 @@ namespace TaskManager.Core.Interfaces
         Task<TaskItem?> GetById(Guid id);
         Task<TaskItem?> Update(TaskItem taskItem);
         Task<bool> Delete(Guid id);
+        Task<IEnumerable<TaskItem>> GetDeleted();
+        Task<bool> Restore(Guid id);
     }
 }

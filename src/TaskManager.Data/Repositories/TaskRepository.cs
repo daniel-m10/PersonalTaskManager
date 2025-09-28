@@ -29,7 +29,7 @@ namespace TaskManager.Data.Repositories
 
         public async Task<bool> Delete(Guid id)
         {
-            var sql = "DELETE FROM Tasks WHERE Id = @Id";
+            var sql = "UPDATE Tasks SET IsDeleted = 1 WHERE Id = @Id";
 
             try
             {
@@ -46,7 +46,7 @@ namespace TaskManager.Data.Repositories
 
         public async Task<IEnumerable<TaskItem>> GetAll()
         {
-            var sql = "SELECT * FROM Tasks";
+            var sql = "SELECT * FROM Tasks WHERE IsDeleted = 0";
 
             try
             {
@@ -63,7 +63,7 @@ namespace TaskManager.Data.Repositories
 
         public async Task<TaskItem?> GetById(Guid id)
         {
-            var sql = "SELECT * FROM Tasks WHERE Id = @Id";
+            var sql = "SELECT * FROM Tasks WHERE Id = @Id AND IsDeleted = 0";
 
             try
             {
@@ -74,6 +74,40 @@ namespace TaskManager.Data.Repositories
             {
                 // Log the exception (Logger will be implemented later)
                 Console.Error.WriteLine($"Error retrieving task by ID: {ex.Message}");
+                throw; // Re-throw the exception after logging it
+            }
+        }
+
+        public async Task<IEnumerable<TaskItem>> GetDeleted()
+        {
+            var sql = "SELECT * FROM Tasks WHERE IsDeleted = 1";
+
+            try
+            {
+                var deletedTasks = await _connection.QueryAsync<TaskItem>(sql);
+                return deletedTasks;
+            }
+            catch (Exception ex)
+            {
+                // Log the exception (Logger will be implemented later)
+                Console.Error.WriteLine($"Error retrieving deleted tasks: {ex.Message}");
+                throw; // Re-throw the exception after logging it
+            }
+        }
+
+        public async Task<bool> Restore(Guid id)
+        {
+            var sql = "UPDATE Tasks SET IsDeleted = 0 WHERE Id = @Id";
+
+            try
+            {
+                var affectedRows = await _connection.ExecuteAsync(sql, new { Id = id.ToString() });
+                return affectedRows > 0;
+            }
+            catch (Exception ex)
+            {
+                // Log the exception (Logger will be implemented later)
+                Console.Error.WriteLine($"Error restoring task: {ex.Message}");
                 throw; // Re-throw the exception after logging it
             }
         }

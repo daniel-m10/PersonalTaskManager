@@ -37,7 +37,8 @@ namespace TaskManager.Tests.Repositories
                     CreatedAt TEXT NOT NULL,
                     DueDate TEXT,
                     CompletedAt TEXT,
-                    UpdatedAt TEXT
+                    UpdatedAt TEXT,
+                    IsDeleted INTEGER NOT NULL DEFAULT 0
                 )";
 
             createTableCmd.ExecuteNonQuery();
@@ -156,10 +157,41 @@ namespace TaskManager.Tests.Repositories
         }
 
         [Test]
+        public async Task GetById_ShouldReturnNull_WhenTaskIsDeleted()
+        {
+            // Arrange
+            var task = InsertTaskItem();
+            await _repository.Delete(task.Id);
+
+            // Act
+            var result = await _repository.GetById(task.Id);
+
+            // Assert
+            Assert.That(result, Is.Null);
+        }
+
+        [Test]
         public async Task GetAll_ShouldReturnAllTaskItems_WhenTasksExist()
         {
             // Arrange
             InsertMultipleTaskItems(2);
+
+            // Act
+            var result = await _repository.GetAll();
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.InstanceOf<IEnumerable<TaskItem>>());
+            Assert.That(result.Count(), Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task GetAll_ShouldNotReturnDeletedTasks_WhenCalled()
+        {
+            // Arrange
+            var tasks = InsertMultipleTaskItems(3);
+            // Delete one task
+            await _repository.Delete(tasks[0].Id);
 
             // Act
             var result = await _repository.GetAll();
@@ -180,6 +212,24 @@ namespace TaskManager.Tests.Repositories
             Assert.That(result, Is.Not.Null);
             Assert.That(result, Is.InstanceOf<IEnumerable<TaskItem>>());
             Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        public async Task GetAll_ShouldReturnOnlyActiveTasks_WhenCalled()
+        {
+            // Arrange
+            var tasks = InsertMultipleTaskItems(5);
+            // Delete two tasks
+            await _repository.Delete(tasks[1].Id);
+            await _repository.Delete(tasks[3].Id);
+
+            // Act
+            var result = await _repository.GetAll();
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.InstanceOf<IEnumerable<TaskItem>>());
+            Assert.That(result.Count(), Is.EqualTo(3));
         }
 
         [Test]
@@ -257,6 +307,69 @@ namespace TaskManager.Tests.Repositories
             Assert.That(result, Is.False);
         }
 
+        [Test]
+        public async Task Delete_ShouldSetIsDeletedToTrue_WhenTaskIsDeleted()
+        {
+            // Arrange
+            var task = InsertTaskItem();
+            var selectCmd = _connection.CreateCommand();
+            selectCmd.CommandText = "SELECT IsDeleted FROM Tasks WHERE Id = @Id";
+            selectCmd.Parameters.Add(new SqliteParameter("@Id", task.Id.ToString()));
+            var isDeletedBefore = Convert.ToInt32(selectCmd.ExecuteScalar());
+            Assert.That(isDeletedBefore, Is.Zero); // Ensure IsDeleted is false before deletion
+
+            // Act
+            var result = await _repository.Delete(task.Id);
+            var isDeletedAfter = Convert.ToInt32(selectCmd.ExecuteScalar());
+
+            using (Assert.EnterMultipleScope())
+            {
+                // Assert
+                Assert.That(result, Is.True);
+                Assert.That(isDeletedAfter, Is.EqualTo(1)); // Ensure IsDeleted is true after deletion
+            }
+        }
+
+        [Test]
+        public async Task GetDeleted_ShouldReturnOnlyDeletedTasks_WhenCalled()
+        {
+            // Arrange
+            var tasks = InsertMultipleTaskItems(4);
+            // Delete two tasks
+            await _repository.Delete(tasks[0].Id);
+            await _repository.Delete(tasks[2].Id);
+
+            // Act
+            var result = await _repository.GetDeleted();
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.InstanceOf<IEnumerable<TaskItem>>());
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(result.Count(), Is.EqualTo(2));
+                Assert.That(result.Select(t => t.IsDeleted), Is.All.True);
+            }
+        }
+
+        [Test]
+        public async Task Restore_ShouldSetIsDeletedToFalse_WhenTaskIsRestored()
+        {
+            // Arrange
+            var task = InsertTaskItem();
+            await _repository.Delete(task.Id);
+
+            // Act
+            var result = await _repository.Restore(task.Id);
+
+            // Assert
+            Assert.That(result, Is.True);
+
+            var currentTask = await _repository.GetById(task.Id);
+            Assert.That(currentTask, Is.Not.Null);
+            Assert.That(currentTask.IsDeleted, Is.False);
+        }
+
         private TaskItem InsertTaskItem()
         {
             var guid = Guid.NewGuid();
@@ -294,7 +407,7 @@ namespace TaskManager.Tests.Repositories
             return taskItem;
         }
 
-        private IEnumerable<TaskItem> InsertMultipleTaskItems(int count)
+        private List<TaskItem> InsertMultipleTaskItems(int count)
         {
             var tasks = new List<TaskItem>();
             for (int i = 0; i < count; i++)
