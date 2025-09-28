@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TaskManager.Core\TaskManager.Core.csproj" />
     <ProjectReference Include="..\..\src\TaskManager.Data\TaskManager.Data.csproj" />
+    <ProjectReference Include="..\..\src\TaskManager.Services\TaskManager.Services.csproj" />
   </ItemGroup>
 
   <ItemGroup>
