@@ -187,7 +187,7 @@ namespace TaskManager.Tests.Services.Validators
                 Status = Status.Todo,
                 Priority = Priority.Low,
                 CreatedAt = DateTime.UtcNow,
-                DueDate = DateTime.UtcNow.AddDays(-1) // Past date
+                DueDate = DateTime.Now.AddDays(-1) // Past date
             };
 
             // Act
