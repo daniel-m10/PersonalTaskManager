@@ -9,7 +9,10 @@ namespace TaskManager.Api.Mapping
         public TaskMappingProfile()
         {
             // CreateMap<Source, Destination>();
-            CreateMap<TaskCreateDto, TaskItem>();
+            CreateMap<TaskCreateDto, TaskItem>()
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => Guid.NewGuid()))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
+
             CreateMap<TaskUpdateDto, TaskItem>();
             CreateMap<TaskItem, TaskResponseDto>();
         }
