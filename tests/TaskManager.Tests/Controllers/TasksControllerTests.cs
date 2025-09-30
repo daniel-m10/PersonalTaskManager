@@ -1,6 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using TaskManager.Api.Controllers;
+using TaskManager.Api.DTOs;
+using TaskManager.Api.Mapping;
 using TaskManager.Core.Common;
 using TaskManager.Core.Entities;
 using TaskManager.Core.Enums;
@@ -13,12 +17,19 @@ namespace TaskManager.Tests.Controllers
     {
         private ITaskService _service;
         private TasksController _controller;
+        private IMapper _mapper;
 
         [SetUp]
         public void Setup()
         {
+            var loggerFactory = LoggerFactory.Create(builder => { builder.AddDebug(); });
+            var mapperConfig = new MapperConfiguration(
+                cfg => cfg.AddProfile(new TaskMappingProfile()),
+                loggerFactory
+            );
+            _mapper = mapperConfig.CreateMapper();
             _service = Substitute.For<ITaskService>();
-            _controller = new TasksController(_service);
+            _controller = new TasksController(_service, _mapper);
         }
 
         [Test]
@@ -27,6 +38,8 @@ namespace TaskManager.Tests.Controllers
             // Arrange
             var tasks = GetSampleTasks();
             _service.GetAllAsync().Returns(Task.FromResult(Result<IEnumerable<TaskItem>>.Success(tasks)));
+
+            var responseDtos = tasks.Select(_mapper.Map<TaskResponseDto>).ToList();
 
             // Act
             var result = await _controller.GetAllAsync();
@@ -39,8 +52,8 @@ namespace TaskManager.Tests.Controllers
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(okResult.StatusCode, Is.EqualTo(200));
-                Assert.That(okResult.Value, Is.EqualTo(tasks));
-                Assert.That((okResult.Value as IEnumerable<TaskItem>)?.Count() ?? 0, Is.EqualTo(tasks.Count()));
+                Assert.That(okResult.Value, Is.EqualTo(responseDtos));
+                Assert.That((okResult.Value as IEnumerable<TaskResponseDto>)?.Count() ?? 0, Is.EqualTo(tasks.Count()));
             }
         }
 
@@ -74,6 +87,8 @@ namespace TaskManager.Tests.Controllers
             var task = GetSampleTasks().First();
             _service.GetByIdAsync(task.Id).Returns(Task.FromResult(Result<TaskItem?>.Success(task)));
 
+            var responseDto = _mapper.Map<TaskResponseDto>(task);
+
             // Act
             var result = await _controller.GetByIdAsync(task.Id);
 
@@ -85,7 +100,7 @@ namespace TaskManager.Tests.Controllers
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(okResult.StatusCode, Is.EqualTo(200));
-                Assert.That(okResult.Value, Is.EqualTo(task));
+                Assert.That(okResult.Value, Is.EqualTo(responseDto));
             }
         }
 
@@ -167,8 +182,18 @@ namespace TaskManager.Tests.Controllers
             var task = GetSampleTasks().First();
             _service.CreateAsync(Arg.Any<TaskItem>()).Returns(Task.FromResult(Result<TaskItem?>.Success(task)));
 
+            var createDto = new TaskCreateDto(
+                Title: task.Title,
+                Description: task.Description,
+                Status: task.Status,
+                Priority: task.Priority,
+                DueDate: task.DueDate
+            );
+
+            var responseDto = _mapper.Map<TaskResponseDto>(task);
+
             // Act
-            var result = await _controller.CreateAsync(task);
+            var result = await _controller.CreateAsync(createDto);
 
             // Assert
             Assert.That(result, Is.TypeOf<CreatedAtActionResult>());
@@ -178,7 +203,7 @@ namespace TaskManager.Tests.Controllers
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(createdResult.StatusCode, Is.EqualTo(201));
-                Assert.That(createdResult.Value, Is.EqualTo(task));
+                Assert.That(createdResult.Value, Is.EqualTo(responseDto));
                 Assert.That(createdResult.ActionName, Is.EqualTo(nameof(TasksController.GetByIdAsync)));
                 Assert.That(createdResult.RouteValues?["id"], Is.EqualTo(task.Id));
             }
@@ -192,8 +217,16 @@ namespace TaskManager.Tests.Controllers
             var errors = new List<string> { "There were issues with validation." };
             _service.CreateAsync(Arg.Any<TaskItem>()).Returns(Task.FromResult(Result<TaskItem?>.Failure(errors)));
 
+            var dto = new TaskCreateDto(
+                Title: task.Title,
+                Description: task.Description,
+                Status: task.Status,
+                Priority: task.Priority,
+                DueDate: task.DueDate
+            );
+
             // Act
-            var result = await _controller.CreateAsync(task);
+            var result = await _controller.CreateAsync(dto);
 
             // Assert
             Assert.That(result, Is.TypeOf<BadRequestObjectResult>());
@@ -216,8 +249,16 @@ namespace TaskManager.Tests.Controllers
             var errors = new List<string> { "Some error occurred" };
             _service.CreateAsync(Arg.Any<TaskItem>()).Returns(Task.FromResult(Result<TaskItem?>.Failure(errors)));
 
+            var dto = new TaskCreateDto(
+                Title: task.Title,
+                Description: task.Description,
+                Status: task.Status,
+                Priority: task.Priority,
+                DueDate: task.DueDate
+            );
+
             // Act
-            var result = await _controller.CreateAsync(task);
+            var result = await _controller.CreateAsync(dto);
 
             // Assert
             Assert.That(result, Is.TypeOf<ObjectResult>());
@@ -239,8 +280,20 @@ namespace TaskManager.Tests.Controllers
             var task = GetSampleTasks().First();
             _service.UpdateAsync(Arg.Any<TaskItem>()).Returns(Task.FromResult(Result<TaskItem?>.Success(task)));
 
+            var updateDto = new TaskUpdateDto(
+                Title: task.Title,
+                Description: task.Description,
+                Status: task.Status,
+                Priority: task.Priority,
+                DueDate: task.DueDate,
+                CompletedAt: task.CompletedAt,
+                UpdatedAt: task.UpdatedAt ?? DateTime.UtcNow
+            );
+
+            var responseDto = _mapper.Map<TaskResponseDto>(task);
+
             // Act
-            var result = await _controller.UpdateAsync(task.Id, task);
+            var result = await _controller.UpdateAsync(task.Id, updateDto);
 
             // Assert
             Assert.That(result, Is.TypeOf<OkObjectResult>());
@@ -250,7 +303,7 @@ namespace TaskManager.Tests.Controllers
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(okResult.StatusCode, Is.EqualTo(200));
-                Assert.That(okResult.Value, Is.EqualTo(task));
+                Assert.That(okResult.Value, Is.EqualTo(responseDto));
             }
         }
 
@@ -262,8 +315,18 @@ namespace TaskManager.Tests.Controllers
             var errors = new List<string> { "Task not found" };
             _service.UpdateAsync(Arg.Any<TaskItem>()).Returns(Task.FromResult(Result<TaskItem?>.Failure(errors)));
 
+            var dto = new TaskUpdateDto(
+                Title: task.Title,
+                Description: task.Description,
+                Status: task.Status,
+                Priority: task.Priority,
+                DueDate: task.DueDate,
+                CompletedAt: task.CompletedAt,
+                UpdatedAt: task.UpdatedAt ?? DateTime.UtcNow
+            );
+
             // Act
-            var result = await _controller.UpdateAsync(task.Id, task);
+            var result = await _controller.UpdateAsync(task.Id, dto);
 
             // Assert
             Assert.That(result, Is.TypeOf<NotFoundObjectResult>());
@@ -286,8 +349,18 @@ namespace TaskManager.Tests.Controllers
             var errors = new List<string> { "There were issues with validation." };
             _service.UpdateAsync(Arg.Any<TaskItem>()).Returns(Task.FromResult(Result<TaskItem?>.Failure(errors)));
 
+            var dto = new TaskUpdateDto(
+                Title: task.Title,
+                Description: task.Description,
+                Status: task.Status,
+                Priority: task.Priority,
+                DueDate: task.DueDate,
+                CompletedAt: task.CompletedAt,
+                UpdatedAt: task.UpdatedAt ?? DateTime.UtcNow
+            );
+
             // Act
-            var result = await _controller.UpdateAsync(task.Id, task);
+            var result = await _controller.UpdateAsync(task.Id, dto);
 
             // Assert
             Assert.That(result, Is.TypeOf<BadRequestObjectResult>());
@@ -309,8 +382,18 @@ namespace TaskManager.Tests.Controllers
             var errors = new List<string> { "Some error occurred" };
             _service.UpdateAsync(Arg.Any<TaskItem>()).Returns(Task.FromResult(Result<TaskItem?>.Failure(errors)));
 
+            var dto = new TaskUpdateDto(
+                Title: task.Title,
+                Description: task.Description,
+                Status: task.Status,
+                Priority: task.Priority,
+                DueDate: task.DueDate,
+                CompletedAt: task.CompletedAt,
+                UpdatedAt: task.UpdatedAt ?? DateTime.UtcNow
+            );
+
             // Act
-            var result = await _controller.UpdateAsync(task.Id, task);
+            var result = await _controller.UpdateAsync(task.Id, dto);
 
             // Assert
             Assert.That(result, Is.TypeOf<ObjectResult>());
