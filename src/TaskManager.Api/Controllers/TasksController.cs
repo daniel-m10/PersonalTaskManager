@@ -47,10 +47,7 @@ namespace TaskManager.Api.Controllers
             var result = await _service.CreateAsync(entity);
 
             if (result.IsSuccess && result.Value is not null)
-                return CreatedAtAction(
-                    nameof(GetByIdAsync),
-                    new { id = result.Value.Id },
-                    _mapper.Map<TaskResponseDto>(result.Value));
+                return Created($"/api/tasks/{result.Value.Id}", _mapper.Map<TaskResponseDto>(result.Value));
 
             if (result.Errors.Any(e => e.Contains("validation", StringComparison.InvariantCultureIgnoreCase)))
                 return BadRequest(result.Errors);

@@ -5,7 +5,7 @@ using TaskManager.Services.Validators.Constants;
 
 namespace TaskManager.Services.Validators
 {
-    public class TaskItemValidator : AbstractValidator<TaskItem>, IValidator<TaskItem>
+    public class TaskItemValidator : AbstractValidator<TaskItem>, TaskManager.Services.Interfaces.IValidator<TaskItem>
     {
         public TaskItemValidator()
         {
